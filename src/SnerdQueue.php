@@ -6,20 +6,27 @@ class SnerdQueue
 {
     private $binary_path;
     private $storage_path;
+    private $shards;
+    private $max_local_shards;
+    private $max_workers;
     private $handlers = [];
     private $maxRetryHandlers = [];
-    
+
     private $process;
     private $pipes;
     private $is_shutting_down = false;
     private $pending_acks = [];
     private $tick_activity = false;
+    private $owned_shards = [];
     public static $current_task_id = null;
 
-    public function __construct(?string $binary_path = null, ?string $storage_path = null)
+    public function __construct(?string $binary_path = null, ?string $storage_path = null, ?int $shards = null, ?int $maxLocalShards = null, ?int $maxWorkers = null)
     {
         $this->binary_path = $binary_path;
         $this->storage_path = $storage_path;
+        $this->shards = $shards;
+        $this->max_local_shards = $maxLocalShards;
+        $this->max_workers = $maxWorkers;
 
         if ($this->binary_path === null) {
             $ext = (PHP_OS_FAMILY === 'Windows') ? '.exe' : '';
@@ -55,13 +62,19 @@ class SnerdQueue
             $cmd .= " " . escapeshellarg($this->storage_path);
         }
 
+        // Build env array with sharding options merged over the current environment.
+        $env = getenv();
+        if ($this->shards !== null)           $env['SNERD_SHARDS']      = (string)$this->shards;
+        if ($this->max_local_shards !== null) $env['SNERD_MAX_SHARDS']  = (string)$this->max_local_shards;
+        if ($this->max_workers !== null)      $env['SNERD_MAX_WORKERS'] = (string)$this->max_workers;
+
         $descriptorspec = [
             0 => ["pipe", "r"],  // stdin
             1 => ["pipe", "w"],  // stdout
             2 => ["pipe", "w"]   // stderr
         ];
 
-        $this->process = proc_open($cmd, $descriptorspec, $this->pipes);
+        $this->process = proc_open($cmd, $descriptorspec, $this->pipes, null, $env);
 
         if (!is_resource($this->process)) {
             throw new \RuntimeException("Failed to spawn SnerdMQ process.");
@@ -166,6 +179,10 @@ class SnerdQueue
                         } else {
                             echo "[Snerd] Error from engine: {$msg['message']}\n";
                         }
+                    } elseif ($msg['action'] === 'membership') {
+                        // Informational only — daemon owns all routing.
+                        $this->owned_shards = $msg['owned'] ?? [];
+                        fwrite(STDERR, "[Snerd] Cluster: queue={$msg['queue']} shards={$msg['shards']} owned=" . json_encode($this->owned_shards) . " version={$msg['version']}\n");
                     } elseif ($msg['action'] === 'progress') {
                         // Persist progress events so the dashboard (which polls
                         // via HTTP in PHP) can display them in the Progress Stream.
@@ -202,15 +219,29 @@ class SnerdQueue
         if (is_resource($this->process)) {
             $status = proc_get_status($this->process);
             if ($status['running']) {
-                proc_terminate($this->process, 15); // SIGTERM
+                proc_terminate($this->process, 15); // SIGTERM — triggers daemon drain
             }
-            
+
+            // Keep reading from stdout during drain so execute responses reach handlers.
+            $deadline = time() + 35;
+            while (time() < $deadline) {
+                $status = proc_get_status($this->process);
+                if (!$status['running']) break;
+                $this->tick(1);
+            }
+
             fclose($this->pipes[0]);
             fclose($this->pipes[1]);
             fclose($this->pipes[2]);
-            
+
             proc_close($this->process);
         }
+    }
+
+    /** Returns the shard keys owned by this instance (last membership event). */
+    public function getOwnedShards(): array
+    {
+        return $this->owned_shards;
     }
 
         private function waitForAck(string $task_id, int $timeout_seconds = 5): void
