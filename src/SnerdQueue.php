@@ -92,7 +92,7 @@ class SnerdQueue
         }
     }
 
-    public function enqueue(string $task_id, string $task_type, array $data, int $max_retries = 3, float $retry_after_hours = 0.0, ?string $rate_limit_group = null, ?int $max_per_minute = null, ?bool $auto_dedupe = null, ?float $urgency_score = null, $execute_at = null, ?string $cron = null, ?string $webhook_url = null, ?int $max_execution_seconds = null): void
+    public function enqueue(string $task_id, string $task_type, array $data, int $max_retries = 3, float $retry_after_hours = 0.0, ?string $rate_limit_group = null, ?int $max_per_minute = null, ?bool $auto_dedupe = null, ?float $urgency_score = null, $execute_at = null, ?string $cron = null, ?string $webhook_url = null, ?int $max_execution_seconds = null, ?string $pool = null): void
     {
         if (!is_resource($this->process) || $this->is_shutting_down) {
             throw new \RuntimeException("[Snerd] Cannot enqueue task: Queue is not running. Call startListening first.");
@@ -135,6 +135,9 @@ class SnerdQueue
         }
         if ($max_execution_seconds !== null) {
             $payload['max_execution_seconds'] = $max_execution_seconds;
+        }
+        if ($pool !== null) {
+            $payload['pool'] = $pool;
         }
 
         $this->pending_acks[$task_id] = false;
