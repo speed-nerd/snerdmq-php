@@ -1,6 +1,6 @@
 <div align="center">
   <img src="./assets/Designer-9.png" height="120" alt="SnerdMQ PHP Logo" />
-  <h1>🐘 SnerdMQ PHP SDK v0.3.4</h1>
+  <h1>🐘 SnerdMQ PHP SDK v0.4.0</h1>
   <p>A zero-config, C-speed background job queue for modern PHP. Ditch Redis and heavy queue workers for a simple, embedded Rust daemon.</p>
 
   [![Packagist Version](https://img.shields.io/packagist/v/speed-nerd/snerdmq)](https://packagist.org/packages/speed-nerd/snerdmq)
@@ -9,7 +9,9 @@
 
 This is the official PHP SDK wrapper for **SnerdMQ**. It handles all JSON-RPC communication and `proc_open` orchestration so you can write lightning-fast background jobs in Laravel, Symfony, or vanilla PHP without managing any external databases like Redis, Beanstalkd, or RabbitMQ.
 
-## ✨ v0.3.4 AI Features
+## ✨ v0.4.0 AI Features
+- **Worker Pools**: Prevent slow generative AI tasks from starving fast DB tasks by dedicating workers to specific pools (e.g. `"urgent"`).
+- **Sharded Queues**: Distribute load across multiple queue nodes safely using file-backed lock sharding (`max_local_shards`).
 - **Smart API Rate-Limiting**: Natively tracks `rate_limit_group` execution velocity to prevent 429 "Too Many Requests" API errors.
 - **Payload-Hashing Deduplication**: Automatically computes cryptographic hashes to drop duplicate tasks instantly.
 - **Dynamic Float Prioritization**: A native Binary Max-Heap bypasses standard FIFO rules for high urgency tasks.
@@ -19,7 +21,7 @@ This is the official PHP SDK wrapper for **SnerdMQ**. It handles all JSON-RPC co
 - **Zero Rust Required**: Our Composer installation script automatically downloads the pre-compiled C-speed Rust binary for your OS.
 - **Non-Blocking**: Uses native PHP `stream_select` to listen to the daemon's output efficiently without pegging your CPU or requiring heavy C-extensions like Swoole.
 
-### ⚙️ Advanced Task Configuration (v0.3.4)
+### ⚙️ Advanced Task Configuration (v0.4.0)
 To power complex AI workflows, tasks can now be configured with advanced orchestration parameters:
 
 * **`auto_dedupe` (`bool`)**: If set to `true`, the daemon computes a cryptographic hash of the `task_type` and `data`. If an identical payload is currently sitting in the queue pending execution, this new task is silently dropped. Excellent for preventing duplicate generative AI requests from trigger-happy users!
@@ -32,6 +34,7 @@ To power complex AI workflows, tasks can now be configured with advanced orchest
 * **`webhook_url` (`string`)**: Optional URL to receive the task payload via POST request instead of local execution.
 * **`max_execution_seconds` (`int`)**: Optional hard timeout in seconds. If execution takes longer, it's marked as failed. Note: Requires the `pcntl` extension, which is not supported on Windows. On Windows, the timeout is ignored locally but still enforced by the Rust daemon.
 * **`trigger_after_ids` (`array`)**: A list of parent task IDs that must complete successfully before this task is allowed to dispatch. Enables complex DAG workflows natively within the queue.
+* **`pool` (`string`)**: Dedicate this task to a specific worker pool (e.g. `"urgent"`).
 
 ### Note on Hard Timeouts (`max_execution_seconds`)
 The PHP SDK uses the `pcntl_alarm` extension to enforce hard timeouts locally for runaway handlers. 
@@ -102,7 +105,9 @@ $queue->enqueue(
     null,           // execute_at
     null,           // cron
     null,           // webhook_url
-    null            // max_execution_seconds
+    null,           // max_execution_seconds
+    null,           // trigger_after_ids
+    null            // pool
 );
 
 // 5. Need scheduling, deduplication, or serverless execution? All
@@ -120,7 +125,9 @@ $queue->enqueue(
     null,
     "0 8 * * *",    // cron: run every day at 08:00
     "https://api.example.com/webhook", // Execute via HTTP instead of local closures
-    300             // max_execution_seconds: hard timeout
+    300,            // max_execution_seconds: hard timeout
+    ["parent-123"], // trigger_after_ids: Wait for parent tasks to complete
+    "urgent"        // pool: Dedicate to a specific worker pool
 );
 
 // 6. Run the event loop (usually done in a dedicated worker script)
@@ -229,7 +236,11 @@ $second = new SnerdQueue();  // ❌ daemon refuses to start:
 // "Another daemon is already running on storage '.snerdata'"
 ```
 
-This applies across processes too — multiple long-running PHP CLI workers on the same machine each spawn their own daemon, so each worker needs its own `$storage_path`.
+This applies across processes too — multiple long-running PHP CLI workers on the same machine each spawn their own daemon, so each worker needs its own `$storage_path`. To safely scale on the same disk without double-executing jobs, you must initialize the daemon with `max_local_shards`:
+```php
+// SnerdMQ will partition the .snerdata locks across shards
+$queue = new SnerdQueue(['max_local_shards' => 4, 'max_workers' => ['urgent' => 5]]);
+```
 
 ### 🔀 Need multiple queues? Give each one its own storage
 
