@@ -293,33 +293,52 @@ SnerdMQ natively supports distributed execution across multiple servers while ac
 ```php
 // 1. Worker Pools: Route tasks to the 'urgent' pool
 $queue->enqueue(
-    'payment-job', 'process_payment', ['amount' => 100],
-    3, 0, null, null, null, null, null, null, null, null, 'urgent'
+    task_id: 'payment-job', 
+    task_type: 'process_payment', 
+    data: ['amount' => 100],
+    pool: 'urgent'
 );
 
 // 2. Job Chaining: Block execution until parents succeed
 $queue->enqueue(
-    'final-job', 'send_report', ['id' => 1],
-    3, 0, null, null, null, null, null, null, null, null, null, ['parent-job-1', 'parent-job-2']
+    task_id: 'final-job', 
+    task_type: 'send_report', 
+    data: ['id' => 1],
+    trigger_after_ids: ['parent-job-1', 'parent-job-2']
 );
 ```
 
 ### 🕒 Cron & Scheduled Jobs
 ```php
 // Run every day at 08:00
-$queue->enqueue('daily-digest', 'send_email', ['template' => 'daily'], 3, 0, null, null, null, null, null, '0 8 * * *');
+$queue->enqueue(
+    task_id: 'daily-digest', 
+    task_type: 'send_email', 
+    data: ['template' => 'daily'], 
+    cron: '0 8 * * *'
+);
 ```
 
 ### 🛑 Hard Timeouts
 ```php
 // Forcefully kill if running > 5 mins
-$queue->enqueue('risky-task', 'process_data', [], 3, 0, null, null, null, null, null, null, null, 300);
+$queue->enqueue(
+    task_id: 'risky-task', 
+    task_type: 'process_data', 
+    data: [], 
+    max_execution_seconds: 300
+);
 ```
 
 ### 🌐 Webhook Callbacks
 ```php
 // Execute via HTTP instead of local handlers
-$queue->enqueue('serverless-task', 'resize_image', ['img' => 'cat.jpg'], 3, 0, null, null, null, null, null, null, 'https://api.example.com/webhooks/snerdmq');
+$queue->enqueue(
+    task_id: 'serverless-task', 
+    task_type: 'resize_image', 
+    data: ['img' => 'cat.jpg'], 
+    webhook_url: 'https://api.example.com/webhooks/snerdmq'
+);
 ```
 
 *Built with ❤️ for John Wick tier engineering.*
