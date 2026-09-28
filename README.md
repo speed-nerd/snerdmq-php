@@ -1,6 +1,6 @@
 <div align="center">
   <img src="./assets/Designer-9.png" height="120" alt="SnerdMQ PHP Logo" />
-  <h1>🐘 SnerdMQ PHP SDK v0.4.1</h1>
+  <h1>🐘 SnerdMQ PHP SDK v0.4.2</h1>
   <p>A zero-config, C-speed background job queue for modern PHP. Ditch Redis and heavy queue workers for a simple, embedded Rust daemon.</p>
 
   [![Packagist Version](https://img.shields.io/packagist/v/speed-nerd/snerdmq)](https://packagist.org/packages/speed-nerd/snerdmq)
@@ -11,7 +11,7 @@ This is the official PHP SDK wrapper for **SnerdMQ**. It handles all JSON-RPC co
 
 > 📚 **Full Documentation & Advanced Features:** Check out the [official PHP SDK documentation](https://speed-nerd.github.io/docs/sdks/php/) on our docs site!
 
-## ✨ v0.4.1 AI Features
+## ✨ v0.4.2 AI Features
 - **Worker Pools**: Prevent slow generative AI tasks from starving fast DB tasks by dedicating workers to specific pools (e.g. `"urgent"`).
 - **Sharded Queues**: Distribute load across multiple queue nodes safely using file-backed lock sharding (`max_local_shards`).
 - **Smart API Rate-Limiting**: Natively tracks `rate_limit_group` execution velocity to prevent 429 "Too Many Requests" API errors.
@@ -23,7 +23,7 @@ This is the official PHP SDK wrapper for **SnerdMQ**. It handles all JSON-RPC co
 - **Zero Rust Required**: Our Composer installation script automatically downloads the pre-compiled C-speed Rust binary for your OS.
 - **Non-Blocking**: Uses native PHP `stream_select` to listen to the daemon's output efficiently without pegging your CPU or requiring heavy C-extensions like Swoole.
 
-### ⚙️ Advanced Task Configuration (v0.4.1)
+### ⚙️ Advanced Task Configuration (v0.4.2)
 To power complex AI workflows, tasks can now be configured with advanced orchestration parameters:
 
 * **`auto_dedupe` (`bool`)**: If set to `true`, the daemon computes a cryptographic hash of the `task_type` and `data`. If an identical payload is currently sitting in the queue pending execution, this new task is silently dropped. Excellent for preventing duplicate generative AI requests from trigger-happy users!
@@ -341,7 +341,7 @@ $queue->enqueue(
 );
 ```
 
-*Built with ❤️ for John Wick tier engineering.*
+
 
 
 ## Architecture Best Practices
@@ -388,3 +388,5 @@ if (function_exists('pcntl_signal')) {
 
 $queue->listenLoop();
 ```
+
+*Built with ❤️ for John Wick tier engineering.*
